@@ -1,17 +1,50 @@
+/* Colours are named for their job. Dark mode (below) only swaps the values. */
 :root {
+  color-scheme: light dark;
   --ink: #1d1b16;
   --muted: #615c50;
   --paper: #faf7f0;
   --card: #fff;
+  --field: #fff;
   --line: #e2dccd;
-  --accent: #c8102e;
+  --soft: #f3efe4; /* a quiet panel inside a card */
+  --tint: #fff2c2; /* the yellow of a markdown sticker, and of search marks */
+  --tint-line: #e6cf7a;
+  --accent: #c8102e; /* the red behind white text: header, main buttons */
   --accent-ink: #fff;
+  --accent-text: #c8102e; /* the red as text on the page: prices, errors */
+  --button-bg: #1d1b16;
+  --button-ink: #fff;
   --good: #1f7a3d;
   --focus: #1a5fd0;
+  --ticket: #ffd84d; /* the shelf ticket stays yellow in dark mode too */
+  --ticket-ink: #3b3000;
+  --ticket-price: #b00d29;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: var(--paper);
   line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ece7dc;
+    --muted: #a8a194;
+    --paper: #15130f;
+    --card: #1f1c17;
+    --field: #27231d;
+    --line: #3b362d;
+    --soft: #2b2720;
+    --tint: #4a3f12;
+    --tint-line: #7a6a24;
+    --accent: #b5102a;
+    --accent-text: #ff7a8a;
+    --button-bg: #ece7dc;
+    --button-ink: #15130f;
+    --good: #2f9b55;
+    --focus: #7aa7ff;
+    --ticket: #f0c843;
+  }
 }
 
 * {
@@ -128,12 +161,12 @@ select {
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
 }
 
 input[aria-invalid="true"] {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 button {
@@ -141,8 +174,8 @@ button {
   border: 0;
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  background: var(--ink);
-  color: #fff;
+  background: var(--button-bg);
+  color: var(--button-ink);
 }
 
 button.quiet {
@@ -158,12 +191,37 @@ button.small {
 }
 
 /* one row on any screen: label, store list, "Near me" */
+/* The search and store row stays at the top while scrolling, on a
+   full-width band of the page colour; once stuck it casts a faint shadow. */
 .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.75rem 0;
+  margin: 0.25rem 0;
+  padding-block: 0.5rem;
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 6;
+  background: var(--paper);
+  /* the band reaches the window's edges with shadows, which never widen the
+     page (a wide pseudo-element did, and made phones scroll sideways) */
+  box-shadow: 0 0 0 100vmax var(--paper);
+  clip-path: inset(0 -100vmax -12px);
+}
+
+/* stuck: a hairline and a soft shadow under the band, painted below the
+   band itself so only their bottom edge shows */
+.filters.stuck {
+  box-shadow:
+    0 0 0 100vmax var(--paper),
+    0 1px 0 100vmax var(--line),
+    0 4px 8px 100vmax rgb(0 0 0 / 0.07);
+}
+
+/* a jump to the feed lands below the stuck row, not under it */
+#feed-layout {
+  scroll-margin-top: calc(var(--filters-h, 0px) + 0.5rem);
 }
 
 .filters select {
@@ -181,12 +239,12 @@ button.small {
 .search input {
   padding: 0.6rem 0.75rem 0.6rem 2.1rem;
   /* a magnifier, drawn so it needs no file and no icon font */
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23615c50' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E") no-repeat 0.7rem center;
+  background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23615c50' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E") no-repeat 0.7rem center;
 }
 
 /* where the search words appear on a card */
 .deal mark {
-  background: #fff2c2;
+  background: var(--tint);
   color: inherit;
   border-radius: 2px;
 }
@@ -254,7 +312,7 @@ button.small {
 }
 
 .error {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -481,8 +539,8 @@ button.small {
 }
 
 .chain-links a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-text);
+  color: var(--accent-text);
 }
 
 .chain-links a::after {
@@ -526,6 +584,77 @@ button.small {
   gap: 0 1rem;
 }
 
+/* Freshness: a strip down the card's left edge, green within the hour,
+   amber within six, then faint; a pulsing dot for the last ten minutes. */
+.deal {
+  --fresh: transparent;
+  box-shadow: inset 4px 0 0 var(--fresh);
+}
+
+.deal[data-fresh="now"],
+.deal[data-fresh="fresh"] {
+  --fresh: var(--good);
+}
+
+.deal[data-fresh="recent"] {
+  --fresh: #d4a017;
+}
+
+.deal[data-fresh="stale"],
+.deal.sold-out {
+  --fresh: var(--line);
+}
+
+.deal[data-fresh="now"]:not(.sold-out) .item::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: 0 0.45rem 0.15rem 0;
+  border-radius: 50%;
+  background: var(--good);
+  vertical-align: middle;
+  animation: pulse 1.8s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
+  100% { box-shadow: 0 0 0 0.5rem transparent; }
+}
+
+/* ends today: a countdown to midnight, red for the last two hours */
+.ends-soon {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--tint-line);
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ends-soon.urgent {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  animation: urgent 2s ease-in-out infinite;
+}
+
+@keyframes urgent {
+  50% { opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .deal h3 {
   margin: 0;
   font-size: 1.1rem;
@@ -537,26 +666,103 @@ button.small {
   font-size: 0.9rem;
 }
 
+/* The price is a shelf ticket: the yellow markdown tag students know from
+   the shops, hung by a hole on the left, with the cut as a sticker on it. */
 .prices {
-  margin: 0.4rem 0;
+  justify-self: start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.55rem;
+  position: relative;
+  margin: 0.55rem 0;
+  padding: 0.2rem 0.6rem 0.2rem 1.35rem;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+  border-radius: 4px 12px 12px 4px;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.1), 0 3px 8px rgb(0 0 0 / 0.1);
   font-variant-numeric: tabular-nums;
 }
 
+.prices::before {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -0.21rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
 .prices .now {
-  font-size: 1.5rem;
-  color: var(--accent);
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ticket-price);
 }
 
 .prices .was {
-  color: var(--muted);
+  color: var(--ticket-ink);
+  opacity: 0.7;
 }
 
+/* the sticker: a quiet dashed one for a small cut, then orange, red, and a
+   red starburst from half off */
 .prices .off {
-  display: inline-block;
-  background: #fff2c2;
-  border-radius: 4px;
-  padding: 0 0.35rem;
-  font-weight: 600;
+  display: inline-grid;
+  place-content: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  margin: -0.55rem 0 -0.55rem 0.1rem;
+  border-radius: 50%;
+  rotate: -10deg;
+  line-height: 1;
+  text-align: center;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.25);
+}
+
+.prices .off b {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.prices .off small {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.off[data-depth="small"] {
+  background: #fffdf4;
+  color: #6b5200;
+  border: 2px dashed #c99a00;
+  box-shadow: none;
+}
+
+.off[data-depth="mid"] {
+  background: #ff9a1f;
+  color: #3a1d00;
+}
+
+.off[data-depth="big"] {
+  background: #e3122f;
+  color: #fff;
+}
+
+.off[data-depth="huge"] {
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-block: -0.8rem;
+  border-radius: 0;
+  background: #d0102b;
+  color: #fff;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+  clip-path: polygon(50% 0%, 61% 13%, 77% 7%, 79% 23%, 95% 25%, 89% 40%, 100% 50%, 89% 60%, 95% 75%, 79% 77%, 77% 93%, 61% 87%, 50% 100%, 39% 87%, 23% 93%, 21% 77%, 5% 75%, 11% 60%, 0% 50%, 11% 40%, 5% 25%, 21% 23%, 23% 7%, 39% 13%);
 }
 
 .meta {
@@ -565,11 +771,31 @@ button.small {
   color: var(--muted);
 }
 
-.stock {
+/* How much is left: three levels side by side, only the reported one lit
+   in its colour; sold out is its own button. */
+.deal[data-stock="plenty"] {
+  --level: var(--good);
+}
+
+.deal[data-stock="some"] {
+  --level: #5f8a1c;
+}
+
+.deal[data-stock="few"] {
+  --level: #c25e00;
+}
+
+.deal[data-stock="gone"] {
+  --level: var(--muted);
+}
+
+.stock,
+.stock-read {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  margin: 0;
 }
 
 .stock-label {
@@ -577,23 +803,74 @@ button.small {
   font-size: 0.9rem;
 }
 
-.stock button {
-  padding: 0.25rem 0.6rem;
+.meter {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--soft);
+}
+
+.meter button {
+  margin: 0;
+  padding: 0.28rem 0.6rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.85rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.meter button + button {
+  border-left: 1px solid var(--line);
+}
+
+.meter button.filled {
+  background: var(--level);
+  color: #fff;
+}
+
+.meter button[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+.stock .gone {
+  margin: 0;
+  padding: 0.28rem 0.6rem;
   font-size: 0.85rem;
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
 }
 
-.stock button[aria-pressed="true"] {
-  background: var(--good);
-  border-color: var(--good);
-  color: #fff;
-}
-
-.stock button[data-stock="gone"][aria-pressed="true"] {
+.stock .gone[aria-pressed="true"] {
   background: var(--muted);
   border-color: var(--muted);
+  color: var(--card);
+  font-weight: 700;
+}
+
+/* a guest's bar: the same cells, nothing to press */
+.meter.static {
+  gap: 3px;
+  padding: 3px;
+}
+
+.meter.static i {
+  width: 1.5rem;
+  height: 0.65rem;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.meter.static i.filled {
+  background: var(--level);
+}
+
+.stock-read .level {
+  font-size: 0.9rem;
+  color: var(--level);
 }
 
 .stock-by {
@@ -601,22 +878,36 @@ button.small {
   font-size: 0.85rem;
 }
 
-.sold-out .prices,
+.deal {
+  position: relative;
+}
+
+.sold-out .prices {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
 .sold-out h3 {
   opacity: 0.55;
 }
 
-/* sold out says so up front, not only in the faded price */
-.sold-out .deal-head::after {
+/* sold out is stamped across the ticket, not only shown by the faded price */
+.sold-out::after {
   content: "Sold out";
-  align-self: start;
-  order: -1;
-  flex-basis: 100%;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  position: absolute;
+  top: 3.6rem;
+  right: 1rem;
+  padding: 0.15rem 0.6rem;
+  border: 3px solid var(--accent-text);
+  border-radius: 6px;
+  color: var(--accent-text);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  rotate: -12deg;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .login-to-comment {
@@ -663,8 +954,8 @@ button.small {
 .notice {
   margin: 0 0 0.5rem;
   padding: 0.6rem 0.8rem;
-  background: #fff2c2;
-  border: 1px solid #e6cf7a;
+  background: var(--tint);
+  border: 1px solid var(--tint-line);
   border-radius: 8px;
 }
 
@@ -702,7 +993,7 @@ button.small {
 .pending li {
   padding: 0.35rem 0.5rem;
   margin-bottom: 0.35rem;
-  background: #f3efe4;
+  background: var(--soft);
   border-radius: 6px;
 }
 
@@ -773,7 +1064,7 @@ button.small {
 }
 
 .similar-item tr.differs td {
-  background: #fff2c2;
+  background: var(--tint);
   font-weight: 600;
 }
 
@@ -791,7 +1082,7 @@ button.small {
 
 .delete-confirm {
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-text);
   border-radius: 6px;
 }
 
@@ -808,6 +1099,487 @@ button.danger {
 .deal.flash {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* Before the first answer: the shapes of a card, shimmering. */
+.skeleton {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  min-height: 15rem;
+}
+
+.bone {
+  display: block;
+  height: 0.9rem;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--soft) 25%, var(--line) 50%, var(--soft) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+
+.bone.title { width: 65%; height: 1.2rem; }
+.bone.line { width: 45%; }
+.bone.line.short { width: 80%; }
+.bone.ticket { width: 11rem; height: 2.6rem; border-radius: 4px 12px 12px 4px; }
+.bone.bar { width: 9rem; height: 1.6rem; }
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* in columns a skeleton spans the card's rows like a real card does */
+@media (min-width: 44rem) {
+  .feed > .skeleton {
+    grid-row: span 11;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Turning a page slides the feed (forward from the right, back from the
+   left); changing store cross-fades. Only the feed moves, never the header. */
+#feed {
+  view-transition-name: feed;
+}
+
+::view-transition-old(feed) {
+  animation: 0.18s ease-in both feed-out;
+}
+
+::view-transition-new(feed) {
+  animation: 0.26s ease-out both feed-in;
+}
+
+:root[data-nav="prev"]::view-transition-old(feed) { animation-name: feed-out-back; }
+:root[data-nav="prev"]::view-transition-new(feed) { animation-name: feed-in-back; }
+:root[data-nav="swap"]::view-transition-old(feed) { animation-name: fade-out; }
+:root[data-nav="swap"]::view-transition-new(feed) { animation-name: fade-in; }
+
+@keyframes feed-out { to { opacity: 0; translate: -2.5rem 0; } }
+@keyframes feed-in { from { opacity: 0; translate: 2.5rem 0; } }
+@keyframes feed-out-back { to { opacity: 0; translate: 2.5rem 0; } }
+@keyframes feed-in-back { from { opacity: 0; translate: -2.5rem 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* The store map: real streets under the stores. Sizes on the map are in map
+   units; --u (map units per screen pixel, set as the view changes) keeps text
+   and lines their size on screen, and roads widen to their real width close up. */
+.store-map {
+  --map-ground: #f2efe9;
+  --map-building: #e1dbd0;
+  --map-building-line: #d3ccbf;
+  --map-green: #cfe8c0;
+  --map-water: #a9d3f2;
+  --map-road: #fff;
+  --map-casing: #d6d0c4;
+  --map-major: #fbd97a;
+  --map-major-casing: #e2ad3c;
+  --map-path: #a59e90;
+  --map-label: #4d483f;
+  --map-halo: rgb(255 255 255 / 0.85);
+  margin: 0.5rem 0 0.75rem;
+  animation: drop-in 0.2s ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  .store-map {
+    --map-ground: #1b1914;
+    --map-building: #2c2821;
+    --map-building-line: #353027;
+    --map-green: #1f2d1b;
+    --map-water: #173246;
+    --map-road: #3a352c;
+    --map-casing: #121009;
+    --map-major: #6a5626;
+    --map-major-casing: #2a2210;
+    --map-path: #6c6557;
+    --map-label: #cfc8ba;
+    --map-halo: rgb(20 18 14 / 0.85);
+  }
+}
+
+.store-map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.store-map h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.map-frame {
+  position: relative;
+  margin: 0.5rem 0 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--map-ground);
+}
+
+#map-svg {
+  --u: 1;
+  display: block;
+  width: 100%;
+  /* short on a phone, so the first special still shows below the map */
+  height: 13rem;
+  touch-action: none; /* the map takes drags and pinches; the page scrolls around it */
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (min-width: 30rem) {
+  #map-svg {
+    height: min(50vh, 20rem);
+  }
+}
+
+@media (min-width: 48rem) {
+  #map-svg {
+    height: min(52vh, 26rem);
+  }
+}
+
+#map-svg.dragging {
+  cursor: grabbing;
+}
+
+.map-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.map-status:empty {
+  display: none;
+}
+
+.map-ground { fill: var(--map-ground); }
+.map-water { fill: var(--map-water); }
+.map-green { fill: var(--map-green); }
+
+.map-buildings {
+  fill: var(--map-building);
+  stroke: var(--map-building-line);
+  stroke-width: calc(var(--u) * 0.5px);
+}
+
+.map-base path:not(.map-water, .map-green, .map-buildings) {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* each road: at least a set number of pixels wide, its real width when zoomed in */
+.map-path {
+  stroke: var(--map-path);
+  stroke-width: max(calc(var(--u) * 0.8px), 1px);
+  stroke-dasharray: calc(var(--u) * 3px) calc(var(--u) * 2px);
+  opacity: 0.8;
+}
+
+.map-service { stroke: var(--map-road); stroke-width: max(calc(var(--u) * 1.2px), 3px); }
+.map-minor { stroke: var(--map-road); stroke-width: max(calc(var(--u) * 2px), 4px); }
+.map-mid { stroke: var(--map-road); stroke-width: max(calc(var(--u) * 3px), 6px); }
+.map-major { stroke: var(--map-major); stroke-width: max(calc(var(--u) * 4px), 9px); }
+
+.map-service.casing { stroke: var(--map-casing); stroke-width: calc(max(calc(var(--u) * 1.2px), 3px) + var(--u) * 1.2px); }
+.map-minor.casing { stroke: var(--map-casing); stroke-width: calc(max(calc(var(--u) * 2px), 4px) + var(--u) * 1.6px); }
+.map-mid.casing { stroke: var(--map-casing); stroke-width: calc(max(calc(var(--u) * 3px), 6px) + var(--u) * 2px); }
+.map-major.casing { stroke: var(--map-major-casing); stroke-width: calc(max(calc(var(--u) * 4px), 9px) + var(--u) * 2px); }
+
+.map-labels text {
+  fill: var(--map-label);
+  font-size: calc(var(--u) * 10.5px);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--map-halo);
+  stroke-width: calc(var(--u) * 3px);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.map-labels text[data-rank="2"] {
+  font-weight: 500;
+}
+
+.map-areas text {
+  fill: var(--map-label);
+  opacity: 0.7;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  paint-order: stroke;
+  stroke: var(--map-halo);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+.map-anu rect {
+  fill: var(--ink);
+  stroke: var(--card);
+  stroke-width: 2px;
+}
+
+.map-anu text {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: var(--map-halo);
+  stroke-width: 3px;
+}
+
+.map-store {
+  cursor: pointer;
+  outline: none;
+}
+
+.map-store circle {
+  fill: var(--card);
+  stroke: var(--muted);
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.35));
+  transition: scale 0.15s;
+}
+
+.map-store[data-live="yes"] circle {
+  fill: var(--ticket);
+  stroke: var(--ticket-price);
+  stroke-width: 2px;
+}
+
+.map-store text {
+  fill: var(--ticket-ink);
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.map-store:hover circle,
+.map-store:focus-visible circle {
+  scale: 1.2;
+}
+
+.map-store:focus-visible circle {
+  stroke: var(--focus);
+  stroke-width: 3px;
+}
+
+.map-store[aria-pressed="true"] circle {
+  stroke: var(--accent-text);
+  stroke-width: 4px;
+}
+
+.map-side {
+  display: none;
+}
+
+/* wide screens: the map as tall as it is drawn, the list of stores beside it */
+@media (min-width: 48rem) {
+  .map-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(14rem, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .map-side {
+    display: block;
+    margin-top: 0.5rem;
+    max-height: min(52vh, 26rem);
+    overflow-y: auto;
+  }
+
+  .map-side h3 {
+    margin: 0 0 0.4rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+}
+
+.map-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-list button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  width: 100%;
+  margin: 0 0 0.35rem;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.map-list button:hover {
+  background: var(--soft);
+}
+
+.map-list button[aria-pressed="true"] {
+  border-color: var(--accent-text);
+  box-shadow: inset 3px 0 0 var(--accent-text);
+}
+
+.map-list span {
+  font-weight: 700;
+}
+
+.map-list small {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.map-list b {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  min-width: 1.8rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+  text-align: center;
+}
+
+.map-store.lit circle {
+  scale: 1.35;
+  stroke: var(--focus);
+  stroke-width: 3px;
+}
+
+.map-zoom {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+}
+
+.map-zoom button {
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.map-zoom button + button {
+  border-top: 1px solid var(--line);
+}
+
+.map-credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0.1rem 0.4rem;
+  border-top-left-radius: 6px;
+  background: var(--map-halo);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.map-credit a {
+  color: inherit;
+}
+
+/* "+1" floats up from the confirmations after confirming */
+.trust {
+  position: relative;
+}
+
+.plus-one {
+  position: absolute;
+  left: 0.2rem;
+  top: -0.2rem;
+  color: var(--good);
+  font-weight: 800;
+  pointer-events: none;
+  animation: float-up 1s ease-out forwards;
+}
+
+@keyframes float-up {
+  to { opacity: 0; translate: 0 -1.6rem; scale: 1.3; }
+}
+
+/* the post form's backdrop exists only where the form is a sheet */
+.sheet-backdrop {
+  display: none;
+}
+
+/* someone else just changed this card: one glow, keeping the freshness edge */
+.deal.updated {
+  animation: updated 1.6s ease-out;
+}
+
+@keyframes updated {
+  0% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 3px color-mix(in srgb, var(--good) 70%, transparent); }
+  100% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 14px transparent; }
+}
+
+/* new posts wait in a pill that rides along at the top while scrolling */
+.new-posts-bar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--filters-h, 0px) + 0.5rem);
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* the bar takes no room; the pill keeps its own height */
+  height: 0;
+  overflow: visible;
+}
+
+.new-posts {
+  margin: 0.25rem 0 0;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background: var(--good);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  animation: drop-in 0.3s ease-out;
+}
+
+@keyframes sheet-up {
+  from { translate: 0 100%; }
+}
+
+@keyframes drop-in {
+  from { opacity: 0; translate: 0 -0.75rem; }
 }
 
 .visually-hidden {
@@ -836,7 +1608,7 @@ button.danger {
 }
 
 .readme main a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .readme main img {
@@ -846,6 +1618,50 @@ button.danger {
 @media (max-width: 30rem) {
   .post .grid {
     grid-template-columns: 1fr;
+  }
+
+  /* On a phone the post form (and its "already posted?" check) is a sheet
+     that slides up over the feed, which dims behind it and holds still. */
+  .post,
+  .similar {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 30;
+    max-height: 88dvh;
+    margin: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 18px 18px 0 0;
+    padding-top: 1.4rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 30px rgb(0 0 0 / 0.3);
+    animation: sheet-up 0.26s ease-out;
+  }
+
+  .post::before,
+  .similar::before {
+    content: "";
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    width: 2.5rem;
+    height: 0.3rem;
+    margin-left: -1.25rem;
+    border-radius: 999px;
+    background: var(--line);
+  }
+
+  .sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgb(0 0 0 / 0.45);
+    animation: fade-in 0.2s ease-out;
+  }
+
+  body.sheet-open {
+    overflow: hidden;
   }
 
   /* a phone gets the first special on screen sooner (the readme keeps its back link) */
@@ -890,8 +1706,9 @@ button.danger {
     gap: 0.25rem;
   }
 
-  .stock button {
-    padding: 0.25rem 0.4rem;
+  .meter button,
+  .stock .gone {
+    padding: 0.28rem 0.45rem;
   }
 }
 
@@ -944,10 +1761,11 @@ button.danger {
 
   /* the store always goes under the item, so a short name doesn't sit
      beside it and leave a gap that a long name's card fills */
-  .deal > .deal-head { grid-row: 1; flex-direction: column; }
+  .deal > .deal-head { grid-row: 1; flex-direction: column; justify-content: flex-start; }
   .deal > .prices { grid-row: 2; }
   .deal > .meta { grid-row: 3; }
-  .deal > .stock { grid-row: 4; }
+  .deal > .stock,
+  .deal > .stock-read { grid-row: 4; }
   .deal > .stock-by { grid-row: 5; }
   .deal > .trust { grid-row: 6; }
   .deal > .history { grid-row: 7; }
@@ -988,7 +1806,7 @@ button.danger {
 }
 
 /* Where columns leave a card narrow (two on a tablet, three on a small
-   laptop), tighten it so the four stock buttons stay on one line. */
+   laptop), tighten it so the stock bar and sold out stay on one line. */
 @media (min-width: 44rem) and (max-width: 52rem), (min-width: 64rem) and (max-width: 80rem) {
   .deal {
     padding: 0.85rem;
@@ -998,8 +1816,9 @@ button.danger {
     gap: 0.25rem;
   }
 
-  .stock button {
-    padding: 0.25rem 0.45rem;
+  .meter button,
+  .stock .gone {
+    padding: 0.28rem 0.45rem;
   }
 }
 

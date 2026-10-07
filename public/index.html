@@ -46,6 +46,8 @@
         </form>
       </section>
 
+      <!-- when this scrolls away, the search row below is stuck to the top -->
+      <div id="filters-top"></div>
       <section class="filters" aria-label="Find specials">
         <!-- searched on the server, so posts past the feed's first 200 are found too -->
         <form id="search-form" class="search" role="search">
@@ -56,7 +58,38 @@
         <label for="store-filter">Showing</label>
         <select id="store-filter"><option value="">Loading stores…</option></select>
         <button type="button" id="locate" class="quiet" title="Sort stores by distance from where you are">Near me</button>
+        <button type="button" id="map-toggle" class="quiet" aria-expanded="true" aria-controls="store-map">Map</button>
         <p class="hint" id="locate-status" aria-live="polite"></p>
+      </section>
+
+      <!-- open unless the visitor closed it (remembered on this device), and short on a
+           phone so the first special still shows below it: the stores on real streets, sized by live specials.
+           The streets are public/streets.json, built once from OpenStreetMap; no map
+           tiles or map service at runtime -->
+      <section id="store-map" class="card store-map" aria-labelledby="store-map-heading">
+        <div class="store-map-head">
+          <h2 id="store-map-heading">Where the specials are</h2>
+          <button type="button" id="map-close" class="quiet small">Close</button>
+        </div>
+        <div class="map-body">
+        <div class="map-frame">
+          <svg id="map-svg" role="group" aria-label="Stores near ANU; pick one to show its specials"></svg>
+          <p id="map-status" class="map-status" aria-live="polite">Loading the map…</p>
+          <div class="map-zoom">
+            <button type="button" id="map-in" aria-label="Zoom in">+</button>
+            <button type="button" id="map-out" aria-label="Zoom out">−</button>
+            <button type="button" id="map-home" aria-label="Show every store">⌂</button>
+          </div>
+          <p class="map-credit">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors</p>
+        </div>
+        <!-- beside the map on a wide screen: the stores with something live, fullest first -->
+        <div class="map-side">
+          <h3>Stores with specials</h3>
+          <ol id="map-list" class="map-list"></ol>
+          <p class="hint" id="map-list-rest"></p>
+        </div>
+        </div>
+        <p class="hint map-hint">Bigger dot, more specials. Drag or pinch the map; pick a store to see only its specials.</p>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->
@@ -101,6 +134,9 @@
       </form>
 
       <!-- shown instead of posting when the special may already be in the feed -->
+      <!-- behind the post form when it is a sheet on a phone; tapping it closes the form -->
+      <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+
       <section id="similar" class="card similar" aria-labelledby="similar-heading" hidden tabindex="-1">
         <h2 id="similar-heading">Already posted?</h2>
         <p class="hint">Someone may have beaten you to it. If one of these is your special, add to it instead of posting it again.</p>
@@ -117,7 +153,15 @@
         <section aria-labelledby="feed-heading">
           <h2 id="feed-heading" class="visually-hidden" tabindex="-1">Specials</h2>
           <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
-          <ol id="feed" class="feed" aria-busy="true"></ol>
+          <!-- new posts wait here to be asked for, rather than pushing the feed down mid-read -->
+          <div class="new-posts-bar" aria-live="polite"><button type="button" id="new-posts" class="new-posts" hidden></button></div>
+          <!-- the shapes of a few cards until the first answer, so the page isn't blank; hidden from screen readers, which hear "Loading specials…" -->
+          <ol id="feed" class="feed" aria-busy="true">
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+          </ol>
           <!-- ten specials a page; filled in by the script once it knows how many there are -->
           <nav id="pager" class="pager" aria-label="Pages of specials" hidden></nav>
         </section>
@@ -186,16 +230,27 @@
         <div class="deal-head">
           <h3 class="item"></h3>
           <p class="store"></p>
+          <p class="ends-soon" hidden></p>
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
         <p class="meta"></p>
+        <!-- how much is left: three levels, only the reported one lit; pressing
+             one reports it, sold out sits apart -->
         <div class="stock" role="group">
           <span class="stock-label">Left:</span>
-          <button type="button" data-stock="plenty">Plenty</button>
-          <button type="button" data-stock="some">Some</button>
-          <button type="button" data-stock="few">A few</button>
-          <button type="button" data-stock="gone">Sold out</button>
+          <span class="meter">
+            <button type="button" data-stock="few">A few</button>
+            <button type="button" data-stock="some">Some</button>
+            <button type="button" data-stock="plenty">Plenty</button>
+          </span>
+          <button type="button" data-stock="gone" class="gone">Sold out</button>
         </div>
+        <!-- a guest's read-only version: the same three cells, no buttons to be refused -->
+        <p class="stock-read" hidden>
+          <span class="stock-label">Left:</span>
+          <span class="meter static" aria-hidden="true"><i></i><i></i><i></i></span>
+          <b class="level"></b>
+        </p>
         <p class="stock-by hint"></p>
         <p class="trust">
           <span class="confirmed"></span>
