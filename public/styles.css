@@ -79,6 +79,185 @@ body {
   color: inherit;
 }
 
+/* the live dot: green and pulsing while changes arrive as they happen */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.18);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.live-badge i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #b9b3a6;
+}
+
+.live-badge[data-state="on"] i {
+  background: #5ee08a;
+  animation: live-pulse 2s ease-out infinite;
+}
+
+.live-badge[data-state="connecting"] i {
+  background: #f3c94a;
+}
+
+.live-badge[data-state="off"] {
+  opacity: 0.7;
+}
+
+.live-badge[data-state="off"] .live-text {
+  text-decoration: line-through;
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(94 224 138 / 0.7); }
+  100% { box-shadow: 0 0 0 0.45rem rgb(94 224 138 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-state="on"] i {
+    animation: none;
+  }
+}
+
+/* Specials · Stores · About: the page you're on is underlined */
+.site-nav {
+  display: flex;
+  gap: 0.15rem;
+  margin-right: auto;
+  font-size: 0.95rem;
+}
+
+.site-nav a {
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  color: var(--accent-ink);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.site-nav a:hover {
+  opacity: 1;
+  background: rgb(255 255 255 / 0.12);
+}
+
+.site-nav a[aria-current="page"] {
+  opacity: 1;
+  box-shadow: inset 0 -2px 0 var(--accent-ink);
+  border-radius: 0;
+}
+
+.masthead .site-nav :focus-visible {
+  outline-color: #fff;
+}
+
+/* a store's own page: its name, where it is, what's live, and how to get there */
+.store-head {
+  margin-top: 1rem;
+}
+
+.store-head .back {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.store-head h2 {
+  margin: 0.35rem 0 0;
+  font-size: 1.4rem;
+}
+
+.store-head .hint {
+  margin: 0.1rem 0 0;
+}
+
+.store-live {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.store-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.6rem 0 0;
+}
+
+.store-links a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#store-share-status:empty {
+  display: none;
+}
+
+/* every store, a row each, the ones with specials first */
+.store-dir {
+  margin-top: 1rem;
+}
+
+.store-dir h2 {
+  margin: 0;
+}
+
+.store-dir-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.store-dir-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.store-dir-list a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.75rem;
+  padding: 0.6rem 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.store-dir-list a:hover .store-dir-name {
+  text-decoration: underline;
+}
+
+.store-dir-name {
+  font-weight: 600;
+}
+
+.store-dir-list small {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.store-dir-count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.store-dir-count[data-live="yes"] {
+  background: var(--tint);
+  color: var(--ink);
+}
+
 .top-links .who {
   font-weight: 600;
 }
@@ -87,12 +266,15 @@ body {
   display: none;
 }
 
-/* buttons that sit on the red header */
-button.on-accent {
+/* buttons that sit on the red header (Log in is a link that looks like one) */
+button.on-accent,
+a.on-accent {
   padding: 0.35rem 0.8rem;
+  border-radius: 6px;
   background: var(--accent-ink);
   color: var(--accent);
   font-weight: 600;
+  text-decoration: none;
 }
 
 button.on-accent.quiet {
@@ -124,7 +306,9 @@ button.theme-toggle {
   line-height: 1.2;
 }
 
-.masthead .title a {
+.masthead .title a,
+.brand-link {
+  color: inherit;
   text-decoration: none;
 }
 
@@ -261,31 +445,115 @@ button.small {
   display: none;
 }
 
-.account {
-  margin: 0.75rem 0;
+/* /login: one card under the header, why on a shelf ticket, then the form;
+   .wrap.login so the wide-screen .wrap width further down doesn't win */
+.wrap.login {
+  max-width: 28rem;
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
 }
 
-.account .auth {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
+.login-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem;
 }
 
-.account .auth label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex: 1 1 12rem;
-  min-width: 0;
+/* the price ticket's shape, hole and all, holding a sentence instead */
+.login-ticket {
+  justify-self: start;
+  position: relative;
+  margin: 0;
+  padding: 0.45rem 0.75rem 0.45rem 1.5rem;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+  border-radius: 4px 12px 12px 4px;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.1), 0 3px 8px rgb(0 0 0 / 0.1);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.login-ticket::before {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -0.21rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.login-form,
+.login-signed-in {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-form label {
+  display: grid;
+  gap: 0.25rem;
   font-size: 0.9rem;
   font-weight: 600;
 }
 
-.account .auth .actions,
-.account .auth .hint,
-.account .auth .error {
-  flex-basis: 100%;
+.login-form input {
+  padding: 0.6rem 0.7rem;
+}
+
+.login-form .hint,
+.login-form .error,
+.login-signed-in p {
   margin: 0;
+}
+
+/* the main action, in the header's red, as wide as the card */
+.login-submit {
+  display: block;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.login-submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* the other way in, as a quiet line of text under it */
+.login-switch {
+  justify-self: center;
+  padding: 0.25rem 0.5rem;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.login-back {
+  margin: 1rem 0 0;
+  text-align: center;
+}
+
+.login-back a {
+  color: var(--muted);
+}
+
+@media (min-width: 44rem) {
+  .wrap.login {
+    padding-top: 3rem;
+  }
 }
 
 .post-toggle {
@@ -619,6 +887,41 @@ button.small {
   gap: 0 1rem;
 }
 
+/* the item's name opens the post on its own page, to share */
+.item-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.item-link:hover,
+.item-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.single-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.single-head .back {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.single-head .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.single-head .hint:empty {
+  display: none;
+}
+
 /* Freshness: a strip down the card's left edge, green within the hour,
    amber within six, then faint; a pulsing dot for the last ten minutes. */
 .deal {
@@ -655,6 +958,27 @@ button.small {
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
   100% { box-shadow: 0 0 0 0.5rem transparent; }
+}
+
+/* how many others have this post or store open: quiet, since it's a hint */
+.watching {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  animation: fade-in 0.4s ease-out;
+}
+
+.watching:empty {
+  display: none;
+}
+
+.store-here {
+  display: inline-block;
 }
 
 /* ends today: a countdown to midnight, red for the last two hours */
@@ -1016,8 +1340,16 @@ button.small {
   from { opacity: 0; scale: 1.8; }
 }
 
+/* a link to /login, looking like the small quiet buttons around it */
 .login-to-comment {
-  margin: 0 0 0.5rem;
+  display: inline-block;
+  margin: 0.3rem 0 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-decoration: none;
 }
 
 .comments summary {
@@ -1480,14 +1812,6 @@ button.danger {
   to { background-position: -100% 0; }
 }
 
-/* in columns a skeleton spans the card's rows like a real card does */
-@media (min-width: 44rem) {
-  .feed > .skeleton {
-    grid-row: span 12;
-    margin-bottom: 0.75rem;
-  }
-}
-
 /* Turning a page slides the feed (forward from the right, back from the
    left); changing store cross-fades. Only the feed moves, never the header. */
 #feed {
@@ -1721,6 +2045,32 @@ button.danger {
 .map-store[aria-pressed="true"] circle {
   stroke: var(--accent-text);
   stroke-width: 4px;
+}
+
+/* news at a store: a ring spreads from its dot once. Invisible at rest, so
+   with motion reduced (animations off) nothing shows. */
+.map-store circle.map-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+  filter: none;
+  opacity: 0;
+  pointer-events: none;
+  animation: map-pulse 1.4s ease-out;
+}
+
+@keyframes map-pulse {
+  from { opacity: 0.9; scale: 1; }
+  to { opacity: 0; scale: 2.6; }
+}
+
+/* fewer live specials: the dot starts at its old size (--was, a ratio) and settles */
+.map-store.shrinking circle:not(.map-pulse) {
+  animation: map-shrink 0.9s ease-in-out;
+}
+
+@keyframes map-shrink {
+  from { scale: var(--was, 1); }
 }
 
 .map-side {
@@ -2024,6 +2374,24 @@ button.danger {
     display: none;
   }
 
+  /* the name and the account share the top row, the site's pages the second,
+     so adding pages didn't push the first special down */
+  .masthead {
+    padding: 0.5rem 0 0.15rem;
+  }
+
+  .site-nav {
+    order: 3;
+    flex: 1;
+    margin: 0 0 0 -0.4rem;
+    font-size: 0.9rem;
+  }
+
+  /* the live dot sits at the end of the pages' row, which has room for it */
+  .live-badge {
+    order: 4;
+  }
+
   .deal {
     padding: 0.85rem;
   }
@@ -2036,7 +2404,8 @@ button.danger {
 /* the narrowest phones (360px): keep the header, the store row and the four
    stock buttons each on one line */
 @media (max-width: 24rem) {
-  .masthead h1 {
+  .masthead h1,
+  .masthead .title {
     font-size: 1.2rem;
   }
 
@@ -2049,7 +2418,12 @@ button.danger {
     font-size: 0.9rem;
   }
 
-  button.on-accent {
+  .site-nav a {
+    padding: 0.25rem 0.4rem;
+  }
+
+  button.on-accent,
+  a.on-accent {
     padding: 0.3rem 0.55rem;
   }
 
@@ -2088,53 +2462,38 @@ button.danger {
     margin-inline: auto;
   }
 
-  .account {
-    max-width: 44rem;
-    margin-inline: auto;
-  }
-
-  /* equal columns filling the centred .wrap, the same width as the post button */
+  /* equal columns filling the centred .wrap, the same width as the post
+     button; --lanes tells app.js how many there are */
   .feed {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --lanes: 2;
+    grid-template-columns: repeat(var(--lanes), minmax(0, 1fr));
     align-items: start;
+  }
+
+  /* A waterfall, like a photo wall: app.js gives each card a column (--lane)
+     and as many 2px rows (--rows) as its own height and the gap under it
+     take, and the grid stacks each column's cards in the feed's order (dense,
+     so a card goes straight under the one above it in its column). A card
+     that grows pushes down only the cards under it, never the one beside it. */
+  .feed.waterfall {
+    grid-auto-rows: 2px;
+    grid-auto-flow: dense;
     row-gap: 0;
   }
 
-  /* Cards side by side share their inner rows (subgrid), so the price, the
-     stock buttons and the rest line up across a row however long each
-     card's text runs. Each part has a fixed row; a part a card doesn't show
-     leaves its row empty rather than pulling the rest up. The gap between
-     card rows is each card's own margin, which subgrid adds to its last row. */
-  .deal {
-    display: grid;
-    grid-row: span 12;
-    grid-template-rows: subgrid;
-    row-gap: 0;
-    align-self: stretch;
-    align-content: start;
-    margin-bottom: 0.75rem;
+  .feed.waterfall > .deal {
+    grid-column: var(--lane, 1);
+    grid-row-end: span var(--rows, 1);
   }
 
-  /* the store always goes under the item, so a short name doesn't sit
-     beside it and leave a gap that a long name's card fills */
-  .deal > .deal-head { grid-row: 1; flex-direction: column; justify-content: flex-start; }
-  .deal > .prices { grid-row: 2; }
-  .deal > .photo-row { grid-row: 3; }
-  .deal > .meta { grid-row: 4; }
-  .deal > .stock,
-  .deal > .stock-read { grid-row: 5; }
-  .deal > .stock-by { grid-row: 6; }
-  .deal > .trust { grid-row: 7; }
-  .deal > .history { grid-row: 8; }
-  .deal > .pending { grid-row: 9; }
-  .deal > .correct { grid-row: 10; }
-  .deal > .comments { grid-row: 11; }
-  .deal > .delete { grid-row: 12; }
+  /* in a column the store goes under the item, so a short name and a long
+     one read the same way */
+  .deal > .deal-head { flex-direction: column; justify-content: flex-start; }
 }
 
 @media (min-width: 64rem) {
   .feed {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --lanes: 3;
   }
 
   /* with posts, the chains' links become a sidebar and the feed keeps two
@@ -2147,7 +2506,7 @@ button.danger {
   }
 
   .feed-layout.has-side .feed {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --lanes: 2;
   }
 
   .feed-layout.has-side .chains {

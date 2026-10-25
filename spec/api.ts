@@ -7,7 +7,9 @@ export const baseUrl = inject("baseUrl");
 
 // Tests that write run against a local app or CI's throwaway container,
 // never the live site, so real users never see test specials in their feed.
-// SPEC_WRITES=1 overrides that, on purpose only.
+// SPEC_WRITES=1 overrides that, on purpose only. Gate writes with it *inside*
+// a test or a beforeAll: a skipped describe's body still runs. no-writes.ts
+// refuses any write that slips past this anyway.
 export const writes =
   ["localhost", "127.0.0.1"].includes(new URL(baseUrl).hostname) || process.env.SPEC_WRITES === "1";
 
@@ -78,3 +80,9 @@ export const special = (by: Person | undefined, over: Record<string, unknown> = 
   author: by?.as,
   ...over,
 });
+
+// an 8×6 JPEG, as Chrome's canvas encodes one (with an ICC profile segment)
+export const JPEG = Buffer.from(
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAGAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAiEAABAgMJAAAAAAAAAAAAAAAAERQCBRIVFiIlMjNSVKH/xAAVAQEBAAAAAAAAAAAAAAAAAAAGB//EABsRAAIBBQAAAAAAAAAAAAAAAAIRAAFBYXHw/9oADAMBAAIRAxEAPwCssJreB3bOV9BrBwTcWrVi8ABKiOpJ2wu3ExFUk7YXbn//2Q==",
+  "base64",
+);

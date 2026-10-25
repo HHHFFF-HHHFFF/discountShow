@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { gzipSync } from "node:zlib";
 import { marked } from "marked";
-import { broadcast, listen, tell } from "./events.ts";
+import { broadcast, listen, presence, setWatch, tell } from "./events.ts";
 import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
 import {
   accountByName,
@@ -54,6 +54,7 @@ import {
   type Value,
   type Viewer,
 } from "./db.ts";
+import { act, begin, isAction, logAction, record, signedIn } from "./log.ts";
 import { itemKey, searchScore, searchTerms } from "./match.ts";
 import { cleanJpeg } from "./photos.ts";
 import { type Store, STORES, storeById } from "./stores.ts";
@@ -182,12 +183,18 @@ function rankedList(store: string | null, terms: string[] | null): Ranked[] {
   return found;
 }
 
-// Each store with how many of its specials are live and not sold out, for
-// the page's map. Worked out from the same cached keys as the feed.
-function storesWithCounts(): (Store & { live: number })[] {
+// Each store with how many of its specials are live and not sold out, and
+// when one was last posted or had its stock reported (sold out included), so
+// the page's map can pulse a store that just had news. Worked out from the
+// same cached keys as the feed.
+function storesWithCounts(): (Store & { live: number; lastReportAt: string | null })[] {
   const live = new Map<string, number>();
-  for (const k of activeDealKeys(null, todayInCanberra())) if (!k.gone) live.set(k.storeId, (live.get(k.storeId) ?? 0) + 1);
-  return STORES.map((st) => ({ ...st, live: live.get(st.id) ?? 0 }));
+  const latest = new Map<string, string>();
+  for (const k of activeDealKeys(null, todayInCanberra())) {
+    if (!k.gone) live.set(k.storeId, (live.get(k.storeId) ?? 0) + 1);
+    if (k.stockAt > (latest.get(k.storeId) ?? "")) latest.set(k.storeId, k.stockAt);
+  }
+  return STORES.map((st) => ({ ...st, live: live.get(st.id) ?? 0, lastReportAt: latest.get(st.id) ?? null }));
 }
 
 function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {
@@ -402,6 +409,63 @@ async function sendFile(req: IncomingMessage, res: ServerResponse, root: string,
   res.end(accepts ? gzipOf(path, data) : data);
 }
 
+const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const dollars = (c: number): string => `$${(c / 100).toFixed(2)}`;
+const PAGE_META = /<!-- page meta[\s\S]*?<!-- \/page meta -->/;
+
+// The page itself, with this address's own title and link preview, so a post
+// or store shared in a chat shows what it is. The page script does the rest.
+async function sendPage(req: IncomingMessage, res: ServerResponse, meta: { title: string; description: string; image?: string }): Promise<void> {
+  const html = await readFile(join("public", "index.html"), "utf8");
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "");
+  const scheme = req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+  const [title, description] = [escapeHtml(meta.title), escapeHtml(meta.description)];
+  const tags = [
+    `<title>${title}</title>`,
+    `<meta name="description" content="${description}" />`,
+    `<meta property="og:site_name" content="discountShow" />`,
+    `<meta property="og:title" content="${title}" />`,
+    `<meta property="og:description" content="${description}" />`,
+    ...(meta.image && /^[\w.:-]+$/.test(host)
+      ? [`<meta property="og:image" content="${escapeHtml(`${scheme}://${host}${meta.image}`)}" />`, `<meta name="twitter:card" content="summary_large_image" />`]
+      : []),
+  ];
+  const page = html.replace(PAGE_META, tags.join("\n    "));
+  const accepts = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    vary: "accept-encoding",
+    ...(accepts ? { "content-encoding": "gzip" } : {}),
+  });
+  res.end(accepts ? gzipSync(page) : page);
+}
+
+const STOCK_WORDS: Record<Stock, string> = { plenty: "plenty left", some: "some left", few: "only a few left", gone: "sold out" };
+
+function dealMeta(id: number) {
+  const d = getDeal(id);
+  const store = d && storeById.get(d.storeId);
+  if (!d || !store) return { title: "Special not found · discountShow", description: "This special has been deleted or never existed." };
+  const pct = Math.round((1 - d.nowCents / d.wasCents) * 100);
+  return {
+    title: `${d.item} ${dollars(d.nowCents)} (was ${dollars(d.wasCents)}) · ${store.name}`,
+    description: `${pct}% off at ${store.name}, ${store.where}. ${STOCK_WORDS[d.stock][0].toUpperCase()}${STOCK_WORDS[d.stock].slice(1)}, reported by students near ANU.`,
+    image: d.photo && !d.photo.hidden ? `/api/deals/${d.id}/photo?v=${encodeURIComponent(d.photo.at)}` : undefined,
+  };
+}
+
+function storeMeta(id: string) {
+  const store = storeById.get(id);
+  if (!store) return { title: "Store not found · discountShow", description: "There is no such store on discountShow." };
+  const live = storesWithCounts().find((s) => s.id === id)!.live;
+  return {
+    title: `${store.name}, ${store.where} · discountShow`,
+    description: `${live === 0 ? "No specials" : live === 1 ? "1 special" : `${live} specials`} live at ${store.name}, ${store.where}, reported by students near ANU.`,
+  };
+}
+
 // README.md is read per request, so a local edit shows without a restart.
 // Relative image links (docs/x.png) resolve under /readme/, which serves docs/.
 async function sendReadme(res: ServerResponse): Promise<void> {
@@ -445,10 +509,30 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  // how many people are here, and on each post and store: counts, never who
+  if (method === "GET" && path === "/api/here") return send(res, 200, presence());
+
+  // an open page says which posts and store it is showing, by its stream's id
+  if (method === "POST" && path === "/api/watch") {
+    const b = await readJson(req);
+    const stream = typeof b.stream === "string" && /^[0-9a-f]{32}$/.test(b.stream) ? b.stream : null;
+    if (!stream) throw new HttpError(400, "stream must be the id this page's live stream was given");
+    if (!Array.isArray(b.watch) || b.watch.length > 20) throw new HttpError(400, "watch must be a list of at most 20 posts and stores");
+    const watch = b.watch.map((w) => {
+      const deal = typeof w === "string" ? w.match(/^deal:(\d{1,9})$/) : null;
+      if (deal) return `deal:${Number(deal[1])}`;
+      if (typeof w === "string" && w.startsWith("store:") && storeById.has(w.slice(6))) return w;
+      throw new HttpError(400, "watch entries are deal:<id> or store:<id>");
+    });
+    if (!setWatch(stream, whoIs(req)?.id ?? null, watch)) throw new HttpError(404, "no such live stream on this page");
+    return send(res, 200, { watching: watch.length });
+  }
+
   // --- accounts
   if (method === "GET" && path === "/api/me") return send(res, 200, whoIs(req));
 
   if (method === "POST" && (path === "/api/register" || path === "/api/login")) {
+    act(req, path === "/api/register" ? "register" : "login");
     const b = await readJson(req);
     const username = typeof b.username === "string" ? b.username.trim() : "";
     if (!USERNAME.test(username)) throw new HttpError(400, "username must be 3–24 letters, digits, - or _");
@@ -458,11 +542,16 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const { salt, hash } = await hashPassword(pw);
       // a name on ADMIN_USERS that registers after startup is an admin from the start
       user = createUser(username, salt, hash, ADMINS.has(username) ? "admin" : "user");
-      if (!user) throw new HttpError(409, "that username is taken");
+      if (!user) {
+        record(req, { as: username });
+        throw new HttpError(409, "that username is taken");
+      }
     } else {
       if (loginBlocked(username)) throw new HttpError(429, "too many wrong passwords, wait a minute");
       const account = accountByName(username);
       const ok = await verifyPassword(pw, (account ?? NO_SUCH_USER).salt, (account ?? NO_SUCH_USER).hash);
+      // the name only once it's known to be an account's: never a password typed in the wrong box
+      if (account) record(req, { as: account.name });
       if (!account || !ok) {
         noteFailure(username);
         throw new HttpError(401, "wrong username or password");
@@ -473,12 +562,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const token = newToken();
     const me: User = { id: user!.id, name: user!.name, role: user!.role };
     startSession(me, token, SESSION_DAYS);
+    signedIn(req, me);
     return send(res, path === "/api/register" ? 201 : 200, me, {
       "set-cookie": setCookie(req, token, SESSION_DAYS * 86_400),
     });
   }
 
   if (method === "POST" && path === "/api/logout") {
+    act(req, "logout");
     const token = tokenOf(req);
     if (token) endSession(token);
     return send(res, 200, { ok: true }, { "set-cookie": setCookie(req, "", 0) });
@@ -497,6 +588,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (method === "POST" && path === "/api/deals") {
+    act(req, "post");
     const who = asAuthor(need(req, "post", "post a special"));
     const b = await readJson(req);
     const storeId = typeof b.storeId === "string" && storeById.has(b.storeId) ? b.storeId : null;
@@ -522,6 +614,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     );
     if ("existing" in result) {
       const { existing } = result;
+      record(req, { existing: existing.id, owner: existing.author.name });
       throw new HttpError(
         409,
         existing.author.id === who.id
@@ -530,6 +623,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         { existing },
       );
     }
+    record(req, { deal: result.created.id, store: storeId, item });
     broadcast({ type: "new", id: result.created.id });
     return send(res, 201, result.created);
   }
@@ -544,8 +638,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // only the poster (or an admin) can take a post down, whoever else has added to it
   if ((m = path.match(/^\/api\/deals\/(\d+)\/delete$/)) && method === "POST") {
+    act(req, "delete post", { deal: Number(m[1]) });
     const user = need(req, "delete-own", "delete a post");
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     if (getDeal(id)!.author.id !== user.id && !can(user.role, "delete-any")) {
       throw new HttpError(403, "only the person who posted this can delete it");
     }
@@ -555,8 +651,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/confirm$/)) && method === "POST") {
+    act(req, "confirm", { deal: Number(m[1]) });
     const who = asAuthor(need(req, "confirm", "confirm a post"));
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     if (getDeal(id)!.author.id === who.id) throw new HttpError(400, "that's your own post");
     const added = confirmDeal(id, who);
     if (added) broadcast({ type: "deal", id });
@@ -564,11 +662,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/corrections$/)) && method === "POST") {
+    act(req, "correct", { deal: Number(m[1]) });
     const who = asAuthor(need(req, "correct", "correct a post"));
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     const b = await readJson(req);
     const field = oneOf<Field>(b.field, CORRECTABLE, "field");
     const value = fieldInput(field, b.value);
+    record(req, { field, value });
     const note = b.note === undefined || b.note === null || b.note === "" ? null : str(b.note, "note", 1, 280);
     const deal = getDeal(id)!;
     if (sameValue(field, fieldValue(deal, field), value)) throw new HttpError(400, "that's what the post already says");
@@ -588,6 +689,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
     // checked again as it applies, inside the same transaction as the write
     const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents && !clash(d));
+    record(req, { applied: result.applied, votes: result.votes });
     broadcast({ type: "deal", id });
     if (deal.author.id !== who.id) tell(deal.author.id, { type: "notice" });
     return send(res, result.applied ? 200 : 201, { ...result, deal: getDeal(id) });
@@ -603,10 +705,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/stock$/)) && method === "POST") {
+    act(req, "report stock", { deal: Number(m[1]) });
     const by = asAuthor(need(req, "stock", "report stock"));
     const id = dealId(m[1]);
     const b = await readJson(req);
     const stock = oneOf<Stock>(b.stock, STOCK_LEVELS, "stock");
+    record(req, { owner: getDeal(id)!.author.name, stock });
     const wait = stockWait(id, by);
     if (wait) throw new HttpError(429, `You just reported this. Try again in ${wait}s.`, { retryAfter: wait });
     reportStock(id, stock, by);
@@ -618,6 +722,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id = dealId(m[1]);
     if (method === "GET") return send(res, 200, listComments(id, viewer(req)));
     if (method === "POST") {
+      act(req, "comment", { deal: id, owner: getDeal(id)!.author.name });
       const user = need(req, "comment", "comment");
       const b = await readJson(req);
       const body = str(b.body, "comment", 1, 500);
@@ -628,6 +733,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         if (!to || to.dealId !== id) throw new HttpError(404, "that comment isn't here any more");
       }
       const newId = addComment(id, body, asAuthor(user), to);
+      record(req, { comment: newId, ...(to ? { replyTo: to.id, replyToAuthor: to.author.name } : {}) });
       broadcast({ type: "deal", id });
       return send(res, 201, listComments(id, viewer(req)).find((c) => c.id === newId));
     }
@@ -635,9 +741,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // --- a deal's shelf photo: the picture, and adding, removing, reporting and reviewing it
   if ((m = path.match(/^\/api\/deals\/(\d+)\/photo(?:\/(delete|report|review))?$/))) {
+    act(req, `${m[2] ?? "add"} photo`, { deal: Number(m[1]) });
     const id = dealId(m[1]);
     const deal = getDeal(id)!;
     const action = m[2];
+    record(req, { owner: deal.author.name });
 
     if (method === "GET" && !action) {
       const photo = photoData(id);
@@ -689,6 +797,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const user = need(req, "report", "report a photo");
       if (deal.author.id === user.id) throw new HttpError(400, "that's your own photo");
       const { added, hidden, admins } = reportPhoto(id, asAuthor(user));
+      record(req, { counted: added, hidden });
       if (hidden) broadcast({ type: "deal", id });
       for (const admin of admins) tell(admin, { type: "notice" });
       return send(res, added ? 201 : 200, { reported: true, deal: getDeal(id) });
@@ -697,6 +806,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     need(req, "moderate", "review a reported photo");
     const b = await readJson(req);
     const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    record(req, { decision });
     if (!reviewPhoto(id, decision)) throw new HttpError(409, "nothing to review on that photo");
     broadcast({ type: "deal", id });
     return send(res, 200, getDeal(id));
@@ -710,11 +820,13 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // a comment's own actions: delete, like, report, and an admin's review
   if ((m = path.match(/^\/api\/comments\/(\d+)\/(delete|like|report|review)$/)) && method === "POST") {
+    act(req, `${m[2]} comment`, { comment: Number(m[1]) });
     const comment = getComment(Number(m[1]));
     if (!comment || !getDeal(comment.dealId)) throw new HttpError(404, "no such comment");
     const id = comment.id;
     const dealOf = comment.dealId;
     const action = m[2];
+    record(req, { deal: dealOf, owner: comment.author.name });
 
     if (action === "delete") {
       const user = need(req, "delete-own", "delete a comment");
@@ -731,6 +843,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
       const b = await readJson(req);
       if (typeof b.liked !== "boolean") throw new HttpError(400, "liked must be true or false");
+      record(req, { liked: b.liked });
       if (likeComment(id, asAuthor(user), b.liked)) broadcast({ type: "deal", id: dealOf });
       return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
     }
@@ -739,6 +852,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const user = need(req, "report", "report a comment");
       if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
       const { added, hidden, admins } = reportComment(id, asAuthor(user));
+      record(req, { counted: added, hidden });
       if (hidden) broadcast({ type: "deal", id: dealOf });
       for (const admin of admins) tell(admin, { type: "notice" }); // their inbox changed
       return send(res, added ? 201 : 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
@@ -747,6 +861,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     need(req, "moderate", "review a reported comment");
     const b = await readJson(req);
     const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    record(req, { decision });
     if (!reviewComment(id, decision)) throw new HttpError(409, "nothing to review on that comment");
     broadcast({ type: "deal", id: dealOf });
     return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
@@ -761,16 +876,40 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
   if (path === "/readme/") return sendReadme(res);
   if (path.startsWith("/readme/docs/")) return sendFile(req, res, "docs", path.slice("/readme/docs/".length));
+  if ((m = path.match(/^\/deals\/(\d{1,9})$/))) return sendPage(req, res, dealMeta(Number(m[1])));
+  if ((m = path.match(/^\/stores\/([a-z0-9-]{1,60})$/))) return sendPage(req, res, storeMeta(m[1]));
+  if (path === "/stores") {
+    return sendPage(req, res, { title: "Stores near ANU · discountShow", description: "Every supermarket and grocer near ANU, and how many specials each has live." });
+  }
+  if (path === "/about") {
+    res.writeHead(301, { location: "/readme/" });
+    return void res.end();
+  }
+  // the same page whatever ?next= and ?why= say; login.js reads and checks them
+  if (path === "/login") return sendFile(req, res, "public", "login.html");
   return sendFile(req, res, "public", path === "/" ? "index.html" : path.slice(1));
 }
 
 const server = createServer((req, res) => {
+  // who did what, for `flyctl logs` (server/log.ts): every change asked for, refused ones too
+  let refusal: string | undefined;
+  const path = new URL(req.url ?? "/", "http://localhost").pathname;
+  if (isAction(req.method ?? "GET", path)) {
+    begin(req, path, whoIs(req));
+    // on close, not finish, so a request whose answer never got through is still logged
+    res.once("close", () => {
+      const cut = res.writableFinished ? undefined : "closed before the answer was sent";
+      logAction(req, res.statusCode, refusal ?? cut);
+    });
+  }
   route(req, res).catch((err: unknown) => {
     if (err instanceof HttpError) {
+      refusal = err.message;
       if (req.url?.startsWith("/api/")) return send(res, err.status, { error: err.message, ...err.extra });
       res.writeHead(err.status, { "content-type": "text/plain; charset=utf-8" });
       return void res.end(err.message);
     }
+    refusal = "server error";
     console.error(err);
     if (!res.headersSent) send(res, 500, { error: "something went wrong on our end" });
     else res.end();
