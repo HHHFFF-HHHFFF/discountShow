@@ -70,7 +70,9 @@ jobs:
   deploy:
     needs: check
     # The template repo itself has no Fly app; only student repos deploy.
-    if: ${{ !github.event.repository.private && !github.event.repository.is_template && github.ref == 'refs/heads/main' }}
+    # The personal copy (HHHFFF-HHHFFF/discountShow) has no Fly token and no
+    # app of its own, so only the course repo deploys; the copy runs the checks.
+    if: ${{ !github.event.repository.private && !github.event.repository.is_template && github.ref == 'refs/heads/main' && github.repository_owner == 'comp4020-agentic-coding-studio' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
