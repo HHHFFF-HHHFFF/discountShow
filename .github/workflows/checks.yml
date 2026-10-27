@@ -44,6 +44,12 @@ jobs:
         # what the container printed, so a crash or slow boot is visible
         if: ${{ failure() }}
         run: docker logs app
+      - name: Fetch the course repo's history
+        # The personal copy's history was rewritten to drop co-author lines,
+        # so the commits PROCESS.md links to (in the course repo) have other
+        # hashes here; fetch them so the evidence check still resolves each one.
+        if: ${{ github.repository_owner != 'comp4020-agentic-coding-studio' }}
+        run: git fetch --no-tags https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff.git main:refs/remotes/course/main
       - name: Check the process evidence
         # skipped in the template repo itself, where PROCESS.md is still the
         # boilerplate every student replaces
